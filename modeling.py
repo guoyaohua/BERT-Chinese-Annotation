@@ -476,6 +476,7 @@ def embedding_postprocessor(input_tensor,
     input_shape = get_shape_list(input_tensor, expected_rank=3)
     batch_size = input_shape[0]
     seq_length = input_shape[1]
+    # embedding_size
     width = input_shape[2]
 
     output = input_tensor
@@ -499,6 +500,7 @@ def embedding_postprocessor(input_tensor,
         output += token_type_embeddings
 
     if use_position_embeddings:
+        # 判断输入序列是否小于等于最大序列长度
         assert_op = tf.assert_less_equal(seq_length, max_position_embeddings)
         with tf.control_dependencies([assert_op]):
             full_position_embeddings = tf.get_variable(
@@ -910,7 +912,7 @@ def transformer_model(input_tensor,
         final_output = reshape_from_matrix(prev_output, input_shape)
         return final_output
 
-
+# 获取tensor形状
 def get_shape_list(tensor, expected_rank=None, name=None):
     """Returns a list of the shape of tensor, preferring static dimensions.
 
@@ -974,7 +976,7 @@ def reshape_from_matrix(output_tensor, orig_shape_list):
 
     return tf.reshape(output_tensor, orig_dims + [width])
 
-
+# 判断tensor的形状是否与给定形状相同，不同则抛异常
 def assert_rank(tensor, expected_rank, name=None):
     """Raises an exception if the tensor rank is not of the expected rank.
 
