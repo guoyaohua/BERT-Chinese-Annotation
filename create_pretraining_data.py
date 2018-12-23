@@ -101,7 +101,9 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
 
     total_written = 0
     for (inst_index, instance) in enumerate(instances):
+        # 将token序列转化为idx序列
         input_ids = tokenizer.convert_tokens_to_ids(instance.tokens)
+        # 标识哪些为有效输入
         input_mask = [1] * len(input_ids)
         segment_ids = list(instance.segment_ids)
         assert len(input_ids) <= max_seq_length
@@ -146,6 +148,7 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
 
         total_written += 1
 
+        # 打印测试
         if inst_index < 20:
             tf.logging.info("*** Example ***")
             tf.logging.info("tokens: %s" % " ".join(
@@ -256,6 +259,7 @@ def create_instances_from_document(
     current_length = 0
     i = 0
     while i < len(document):
+        # 获取文章中的第i个句子
         segment = document[i]
         current_chunk.append(segment)
         current_length += len(segment)
@@ -274,6 +278,7 @@ def create_instances_from_document(
                 tokens_b = []
                 # Random next
                 is_random_next = False
+                # 当分段中只有一句话，或者以百分之50的概率为random
                 if len(current_chunk) == 1 or rng.random() < 0.5:
                     is_random_next = True
                     target_b_length = target_seq_length - len(tokens_a)
@@ -304,6 +309,7 @@ def create_instances_from_document(
                     is_random_next = False
                     for j in range(a_end, len(current_chunk)):
                         tokens_b.extend(current_chunk[j])
+                # 截断至max_num_tokens
                 truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng)
 
                 assert len(tokens_a) >= 1
@@ -404,6 +410,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
 
 def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng):
     """Truncates a pair of sequences to a maximum sequence length."""
+    # 将二者长度和截断至max_num_tokens大小，以50%的概率分别从前或从后依次截断
     while True:
         total_length = len(tokens_a) + len(tokens_b)
         if total_length <= max_num_tokens:
@@ -436,7 +443,7 @@ def main(_):
         tf.logging.info("  %s", input_file)
     # 随机种子
     rng = random.Random(FLAGS.random_seed)
-
+    # 创建训练数据，mask & next sentence pridict
     instances = create_training_instances(
         input_files, tokenizer, FLAGS.max_seq_length, FLAGS.dupe_factor,
         FLAGS.short_seq_prob, FLAGS.masked_lm_prob,
