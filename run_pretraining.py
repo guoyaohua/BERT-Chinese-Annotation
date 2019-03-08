@@ -424,7 +424,7 @@ def main(_):
             "At least one of `do_train` or `do_eval` must be True.")
     # 导入bert模型参数
     bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
-
+    # 构建输出路径
     tf.gfile.MakeDirs(FLAGS.output_dir)
 
     input_files = []
@@ -434,7 +434,7 @@ def main(_):
     tf.logging.info("*** Input Files ***")
     for input_file in input_files:
         tf.logging.info("  %s" % input_file)
-
+    # 构建TPU集群解析器
     tpu_cluster_resolver = None
     if FLAGS.use_tpu and FLAGS.tpu_name:
         tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(

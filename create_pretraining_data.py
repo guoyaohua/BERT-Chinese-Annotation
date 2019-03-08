@@ -41,14 +41,14 @@ flags.DEFINE_bool(
     "do_lower_case", True,
     "Whether to lower case the input text. Should be True for uncased "
     "models and False for cased models.")
-
+# 最大序列长度
 flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
 flags.DEFINE_integer("max_predictions_per_seq", 20,
                      "Maximum number of masked LM predictions per sequence.")
 
 flags.DEFINE_integer("random_seed", 12345, "Random seed for data generation.")
-
+# 复制输入数据的次数（使用不同的掩码）。
 flags.DEFINE_integer(
     "dupe_factor", 10,
     "Number of times to duplicate the input data (with different masks).")
@@ -185,7 +185,19 @@ def create_float_feature(values):
 def create_training_instances(input_files, tokenizer, max_seq_length,
                               dupe_factor, short_seq_prob, masked_lm_prob,
                               max_predictions_per_seq, rng):
-    """Create `TrainingInstance`s from raw text."""
+    """
+    Create `TrainingInstance`s from raw text.
+    从原始文本数据构造训练样本
+
+    params：
+    max_seq_length          ——  最大句子长度
+    dupe_factor             ——  预测词任务：复制输入数据的次数（使用不同的掩码）
+    short_seq_prob          ——  短序列概率
+    masked_lm_prob          ——
+    max_predictions_per_seq ——
+    rng                     ——  随机种子
+    """
+    # all_documents = [文章1=[句子1=['词片1'，‘词片2’，...]，“句子2”...]，文章2...]
     all_documents = [[]]
 
     # Input file format:
@@ -194,27 +206,36 @@ def create_training_instances(input_files, tokenizer, max_seq_length,
     # sentence boundaries for the "next sentence prediction" task).
     # (2) Blank lines between documents. Document boundaries are needed so
     # that the "next sentence prediction" task doesn't span between documents.
+
+    # 输入数据格式：
+    # 1.每一行是一个完整的句子，理想情况下，这些应该是实际的句子，
+    # 而不是整个段落或任意文本跨度。（因为我们使用“下一个句子预测”任务的句子边界）
+    # 2.文档之间有空行。需要文件边界，因此“下一句预测”任务不跨越文档。
+
     for input_file in input_files:
         with tf.gfile.GFile(input_file, "r") as reader:
             while True:
+                # 首先将输入文本转为unicode编码
                 line = tokenization.convert_to_unicode(reader.readline())
                 if not line:
                     break
                 line = line.strip()
 
                 # Empty lines are used as document delimiters
+                # 如果line为空行，则是文件分隔符
                 if not line:
                     all_documents.append([])
+                # tokens 是一个词片token的list
                 tokens = tokenizer.tokenize(line)
                 if tokens:
                     all_documents[-1].append(tokens)
 
     # Remove empty documents
-    # all_documents list(list(list(token)))  
-    # 第一层list为文件，第二层list为每篇文章中的句子，第三层list为每个句子中的token
+    # 去除all_documents中的空list（空文章）
     all_documents = [x for x in all_documents if x]
+    # rng为随机种子
     rng.shuffle(all_documents)
-
+    # 词汇表单词列表
     vocab_words = list(tokenizer.vocab.keys())
     instances = []
     for _ in range(dupe_factor):
@@ -232,7 +253,10 @@ def create_training_instances(input_files, tokenizer, max_seq_length,
 def create_instances_from_document(
         all_documents, document_index, max_seq_length, short_seq_prob,
         masked_lm_prob, max_predictions_per_seq, vocab_words, rng):
-    """Creates `TrainingInstance`s for a single document."""
+    """
+    Creates `TrainingInstance`s for a single document.
+    使用一篇文章，创建训练样本实体
+    """
     document = all_documents[document_index]
 
     # Account for [CLS], [SEP], [SEP]
@@ -245,6 +269,11 @@ def create_instances_from_document(
     # sequences to minimize the mismatch between pre-training and fine-tuning.
     # The `target_seq_length` is just a rough target however, whereas
     # `max_seq_length` is a hard limit.
+
+    # 我们通常想要填充整个序列，因为我们无论如何都要填充到'max_seq_length'，
+    # 所以短序列通常会浪费计算。
+    # 然而，我们有时（即，short_seq_prob==0.1==10%的时间）希望使用较短的序列来最小化预训练和微调之间的不匹配。
+    # “target-seq-length”只是一个粗略的目标，而“max-seq-length”则是一个硬限制。
     target_seq_length = max_num_tokens
     if rng.random() < short_seq_prob:
         target_seq_length = rng.randint(2, max_num_tokens)
@@ -261,12 +290,15 @@ def create_instances_from_document(
     while i < len(document):
         # 获取文章中的第i个句子
         segment = document[i]
+        # current_chunk为句子词片token列表的列表，是个双重列表
         current_chunk.append(segment)
+        # current_length 为累加的 WordPiece_token 数量
         current_length += len(segment)
         if i == len(document) - 1 or current_length >= target_seq_length:
             if current_chunk:
                 # `a_end` is how many segments from `current_chunk` go into the `A`
                 # (first) sentence.
+                # a_end 定义了要往tokens_a中放多少个current_chunk中的token
                 a_end = 1
                 if len(current_chunk) >= 2:
                     a_end = rng.randint(1, len(current_chunk) - 1)
@@ -278,7 +310,7 @@ def create_instances_from_document(
                 tokens_b = []
                 # Random next
                 is_random_next = False
-                # 当分段中只有一句话，或者以百分之50的概率为random
+                # 当分段中只有一句话，或者以百分之50的概率为random，制作负样本
                 if len(current_chunk) == 1 or rng.random() < 0.5:
                     is_random_next = True
                     target_b_length = target_seq_length - len(tokens_a)
@@ -287,6 +319,7 @@ def create_instances_from_document(
                     # corpora. However, just to be careful, we try to make sure that
                     # the random document is not the same as the document
                     # we're processing.
+                    # 确保从另一篇文章取句子
                     for _ in range(10):
                         random_document_index = rng.randint(
                             0,
@@ -304,7 +337,9 @@ def create_instances_from_document(
                     # they don't go to waste.
                     num_unused_segments = len(current_chunk) - a_end
                     i -= num_unused_segments
+
                 # Actual next
+                # 生成正样本
                 else:
                     is_random_next = False
                     for j in range(a_end, len(current_chunk)):
@@ -429,7 +464,7 @@ def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng):
 
 def main(_):
     tf.logging.set_verbosity(tf.logging.INFO)
-
+    # 实例化一个FullTokenizer对象
     tokenizer = tokenization.FullTokenizer(
         vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
 

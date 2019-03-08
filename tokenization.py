@@ -77,7 +77,10 @@ def validate_case_matches_checkpoint(do_lower_case, init_checkpoint):
 
 
 def convert_to_unicode(text):
-    """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
+    """
+    Converts `text` to Unicode (if it's not already), assuming utf-8 input.
+    将输入文本转化为unicode编码，假设输入为utf-8编码
+    """
     if six.PY3:
         if isinstance(text, str):
             return text
@@ -118,16 +121,21 @@ def printable_text(text):
     else:
         raise ValueError("Not running on Python2 or Python 3?")
 
-# 将单词表文件（仅为单词）映射到dic中，[string,int]
+
 def load_vocab(vocab_file):
-    """Loads a vocabulary file into a dictionary."""
+    """
+    Loads a vocabulary file into a dictionary.
+    将单词表文件（仅为单词）映射到dic中，[string,int]
+    """
     vocab = collections.OrderedDict()
     index = 0
     with tf.gfile.GFile(vocab_file, "r") as reader:
         while True:
+            # 转化为unicode
             token = convert_to_unicode(reader.readline())
             if not token:
                 break
+            # 去除多余空格
             token = token.strip()
             vocab[token] = index
             index += 1
@@ -151,10 +159,15 @@ def convert_ids_to_tokens(inv_vocab, ids):
 
 
 def whitespace_tokenize(text):
-    """Runs basic whitespace cleaning and splitting on a piece of text."""
+    """
+    Runs basic whitespace cleaning and splitting on a piece of text.
+    使用空格分词
+    返回一个list
+    """
     text = text.strip()
     if not text:
         return []
+    # str.split() | 分隔符，默认为所有的空字符，包括空格、换行(\n)、制表符(\t)等
     tokens = text.split()
     return tokens
 
@@ -164,6 +177,7 @@ class FullTokenizer(object):
 
     def __init__(self, vocab_file, do_lower_case=True):
         # VOCAB dict {word:index}
+        # 根据词汇表文件生成字典
         self.vocab = load_vocab(vocab_file)
         # dict {index:word}
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
@@ -173,13 +187,18 @@ class FullTokenizer(object):
         self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab)
 
     def tokenize(self, text):
+        '''
+        将一个text str转化为token list
+        1.先清洗文本
+        2.再将单词token拆分问词片token，最终最终返回
+        '''
         split_tokens = []
         # 首先通过 base tokenizer 将长文本切分为以单词为元素的token list
         for token in self.basic_tokenizer.tokenize(text):
             # 再使用wordpiece_tokenizer在单词粒度上进行分片切分，做更细粒度的tocken
             for sub_token in self.wordpiece_tokenizer.tokenize(token):
                 split_tokens.append(sub_token)
-
+        # split_tokens为一个list，[‘word_piece1’，‘word_piece2’.......]
         return split_tokens
 
     def convert_tokens_to_ids(self, tokens):
@@ -201,7 +220,10 @@ class BasicTokenizer(object):
         self.do_lower_case = do_lower_case
 
     def tokenize(self, text):
-        """Tokenizes a piece of text."""
+        """
+        Tokenizes a piece of text.
+        处理文本，分词，将每个token用空格连接成一个字符串返回。
+        """
         # 将字符串转化为unicode格式
         text = convert_to_unicode(text)
         # 删除无效字符
@@ -216,7 +238,7 @@ class BasicTokenizer(object):
 
         # 在中文字符的左右加上空格
         text = self._tokenize_chinese_chars(text)
-        # 使用空格来切分token
+        # 使用空格来切分token，orig_tokens是一个list
         orig_tokens = whitespace_tokenize(text)
         split_tokens = []
         for token in orig_tokens:
@@ -224,10 +246,12 @@ class BasicTokenizer(object):
                 token = token.lower()
                 # 去除重音字符
                 token = self._run_strip_accents(token)
-            # _run_split_on_punc 将标点符号也当作一个单词，将单词当作一个list放入另一个list中返回 list（list(char))
+            # _run_split_on_punc 将标点符号也当作一个单词
+            # split_tokens 为一个列表，其中每个元素都是一个token
             split_tokens.extend(self._run_split_on_punc(token))
-
+        # 将处理好的token用空格连接成一个字符串，并用空格分词
         output_tokens = whitespace_tokenize(" ".join(split_tokens))
+        # output_tokens 为一个list，每一个元素为一个token
         return output_tokens
 
     def _run_strip_accents(self, text):
@@ -242,7 +266,10 @@ class BasicTokenizer(object):
         return "".join(output)
 
     def _run_split_on_punc(self, text):
-        """Splits punctuation（标点符号） on a piece of text."""
+        """
+        Splits punctuation（标点符号） on a piece of text.
+        将标点拆分，例如将‘word，’转化为[‘word’，‘，’]，输入为一个单词列表
+        """
         chars = list(text)
         i = 0
         start_new_word = True
@@ -262,7 +289,10 @@ class BasicTokenizer(object):
         return ["".join(x) for x in output]
 
     def _tokenize_chinese_chars(self, text):
-        """Adds whitespace around any CJK character."""
+        """
+        Adds whitespace around any CJK character.
+        在中文字符左右两边加空格
+        """
         output = []
         for char in text:
             cp = ord(char)
@@ -275,7 +305,10 @@ class BasicTokenizer(object):
         return "".join(output)
 
     def _is_chinese_char(self, cp):
-        """Checks whether CP is the codepoint of a CJK character."""
+        """
+        Checks whether CP is the codepoint of a CJK character.
+        判断是否为中文（中／日／韩）
+        """
         # This defines a "chinese character" as anything in the CJK Unicode block:
         #   https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
         #
@@ -296,11 +329,15 @@ class BasicTokenizer(object):
 
         return False
    
-    # 删除无效字符
+    
     def _clean_text(self, text):
-        """Performs invalid character removal and whitespace cleanup on text."""
+        """
+        Performs invalid character removal and whitespace cleanup on text.
+        删除无效字符,返回一个str
+        """
         output = []
         for char in text:
+            # 返回对应的 ASCII 数值，或者 Unicode 数值
             cp = ord(char)
             if cp == 0 or cp == 0xfffd or _is_control(char):
                 continue
@@ -323,28 +360,29 @@ class WordpieceTokenizer(object):
     def tokenize(self, text):
         """Tokenizes a piece of text into its word pieces.
 
-    This uses a greedy longest-match-first algorithm to perform tokenization
-    using the given vocabulary.
+        This uses a greedy longest-match-first algorithm to perform tokenization
+        using the given vocabulary.
 
-    将单词按片切分，这样做可以压缩词汇表，并且习得词性信息
+        将单词按片切分，这样做可以压缩词汇表，并且习得词性信息
 
-    For example:
-      input = "unaffable"
-      output = ["un", "##aff", "##able"]
+        For example:
+        input = "unaffable"
+        output = ["un", "##aff", "##able"]
 
-    Args:
-      text: A single token or whitespace separated tokens. This should have
-        already been passed through `BasicTokenizer.
+        Args:
+        text: A single token or whitespace separated tokens. This should have
+            already been passed through `BasicTokenizer.
 
-    Returns:
-      A list of wordpiece tokens.
-    """
+        Returns:
+        A list of wordpiece tokens.
+        """
 
         text = convert_to_unicode(text)
 
         output_tokens = []
         for token in whitespace_tokenize(text):
             chars = list(token)
+            # 如果单词字母数量达上限，则标识为无法识别字符
             if len(chars) > self.max_input_chars_per_word:
                 output_tokens.append(self.unk_token)
                 continue
@@ -389,7 +427,11 @@ def _is_whitespace(char):
 
 
 def _is_control(char):
-    """Checks whether `chars` is a control character."""
+    """
+    Checks whether `chars` is a control character.
+    判断字符是否为控制字符，不包含‘\t’,'\r','\n'
+    https://baike.baidu.com/item/%E6%8E%A7%E5%88%B6%E5%AD%97%E7%AC%A6/6913704
+    """
     # These are technically control characters but we count them as whitespace
     # characters.
     if char == "\t" or char == "\n" or char == "\r":

@@ -26,7 +26,7 @@ import re
 import six
 import tensorflow as tf
 
-
+tf.keras
 class BertConfig(object):
     """Configuration for `BertModel`."""
 
@@ -155,10 +155,12 @@ class BertModel(object):
         is invalid.
     """
         config = copy.deepcopy(config)
+        # 如果不是训练，则将dropout置零
         if not is_training:
             config.hidden_dropout_prob = 0.0
             config.attention_probs_dropout_prob = 0.0
-
+        # 获取 batch_size 和 seq_length （get_shape_list规定了返回的维度，
+        # 如果不等于指定expected_rank，则抛异常）
         input_shape = get_shape_list(input_ids, expected_rank=2)
         batch_size = input_shape[0]
         seq_length = input_shape[1]
@@ -416,7 +418,7 @@ def embedding_lookup(input_ids,
     # reshape to [batch_size, seq_length, 1].
     if input_ids.shape.ndims == 2:
         input_ids = tf.expand_dims(input_ids, axis=[-1])
-
+    # embedding 矩阵生成
     embedding_table = tf.get_variable(
         name=word_embedding_name,
         shape=[vocab_size, embedding_size],
@@ -516,6 +518,7 @@ def embedding_postprocessor(input_tensor,
             # for position [0, 1, 2, ..., max_position_embeddings-1], and the current
             # sequence has positions [0, 1, 2, ... seq_length-1], so we can just
             # perform a slice.
+            # 位置嵌入，直接使用序列长度将嵌入矩阵切割片段，直接叠加即可
             position_embeddings = tf.slice(full_position_embeddings, [0, 0],
                                            [seq_length, -1])
             num_dims = len(output.shape.as_list())
@@ -715,6 +718,7 @@ def attention_layer(from_tensor,
     # attention scores.
     # `attention_scores` = [B, N, F, T]
     attention_scores = tf.matmul(query_layer, key_layer, transpose_b=True)
+    # 将attention缩放
     attention_scores = tf.multiply(attention_scores,
                                    1.0 / math.sqrt(float(size_per_head)))
 
@@ -912,6 +916,7 @@ def transformer_model(input_tensor,
         final_output = reshape_from_matrix(prev_output, input_shape)
         return final_output
 
+
 # 获取tensor形状
 def get_shape_list(tensor, expected_rank=None, name=None):
     """Returns a list of the shape of tensor, preferring static dimensions.
@@ -975,6 +980,7 @@ def reshape_from_matrix(output_tensor, orig_shape_list):
     width = output_shape[-1]
 
     return tf.reshape(output_tensor, orig_dims + [width])
+
 
 # 判断tensor的形状是否与给定形状相同，不同则抛异常
 def assert_rank(tensor, expected_rank, name=None):
